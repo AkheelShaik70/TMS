@@ -1,0 +1,12 @@
+target/
+.classpath
+.project
+.settings/
+.sts4-cache/
+.idea/
+*.iml
+.env
+.env.*
+!.env.example
+application-local.properties
+*.log
