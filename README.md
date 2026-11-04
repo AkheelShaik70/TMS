@@ -13,7 +13,7 @@ This repository contains the initial Spring Boot security module for the Support
 - Google accounts are created as CUSTOMER accounts. Existing LOCAL accounts are not silently linked to Google.
 
 ## Requirements
-- Java 17+
+- Java 25
 - Maven
 - MySQL 8+
 - Google OAuth client credentials for Google sign-in
