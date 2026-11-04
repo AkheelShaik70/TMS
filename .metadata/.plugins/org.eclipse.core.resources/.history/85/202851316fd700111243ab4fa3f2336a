@@ -1,0 +1,5 @@
+package com.example.tms.repository;
+
+public interface RoleRepository {
+
+}
