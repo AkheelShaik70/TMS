@@ -3,6 +3,7 @@ package com.example.tms.controller;
 
 import com.example.tms.dto.CreateTicketRequest;
 import com.example.tms.dto.TicketResponse;
+import com.example.tms.dto.UpdateTicketRequest;
 import com.example.tms.service.TicketService;
 
 import jakarta.validation.Valid;
@@ -53,5 +54,19 @@ public class TicketController {
             Authentication authentication) {
 
         return ticketService.getAllTickets(authentication);
+    }
+
+    // Update ticket status and/or priority
+    @PatchMapping("/{id}")
+    public TicketResponse updateTicket(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTicketRequest request,
+            Authentication authentication) {
+
+        return ticketService.updateTicket(
+                id,
+                request,
+                authentication
+        );
     }
 }

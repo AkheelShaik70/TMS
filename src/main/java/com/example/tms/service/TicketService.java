@@ -3,6 +3,7 @@ package com.example.tms.service;
 
 import com.example.tms.dto.CreateTicketRequest;
 import com.example.tms.dto.TicketResponse;
+import com.example.tms.dto.UpdateTicketRequest;
 import com.example.tms.entity.Ticket;
 import com.example.tms.entity.User;
 import com.example.tms.repository.TicketRepository;
@@ -27,6 +28,7 @@ public class TicketService {
     public TicketService(
             TicketRepository ticketRepository,
             UserRepository userRepository) {
+
         this.ticketRepository = ticketRepository;
         this.userRepository = userRepository;
     }
@@ -110,21 +112,85 @@ public class TicketService {
         List<Ticket> tickets;
 
         if (hasRole(user, "ADMIN")) {
+
             tickets = ticketRepository.findAll();
 
         } else if (hasRole(user, "AGENT")) {
-            tickets = ticketRepository.findByAssignedAgentId(user.getId());
+
+            // Agent can see tickets created by them
+            // OR tickets currently assigned to them
+            tickets = ticketRepository.findByAssignedAgentIdOrCreatedById(
+                    user.getId(),
+                    user.getId()
+            );
 
         } else if (hasRole(user, "CUSTOMER")) {
+
             tickets = ticketRepository.findByCustomerId(user.getId());
 
         } else {
+
             throw new AccessDeniedException("Invalid user role");
         }
 
         return tickets.stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    // Update ticket status and/or priority
+    @Transactional
+    public TicketResponse updateTicket(
+            Long id,
+            UpdateTicketRequest request,
+            Authentication authentication) {
+
+        User user = getAuthenticatedUser(authentication);
+
+        if (!hasRole(user, "ADMIN") && !hasRole(user, "AGENT")) {
+            throw new AccessDeniedException(
+                    "Only agents and administrators can update tickets");
+        }
+
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Ticket not found"));
+
+        // ADMIN can update any ticket
+        if (!hasRole(user, "ADMIN")) {
+
+            // AGENT can update only tickets assigned to them
+            boolean assignedAgent =
+                    ticket.getAssignedAgent() != null
+                            && ticket.getAssignedAgent().getId()
+                            .equals(user.getId());
+
+            if (!assignedAgent) {
+                throw new AccessDeniedException(
+                        "You can update only tickets assigned to you");
+            }
+        }
+
+        // At least one field must be provided
+        if (request.status() == null && request.priority() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Provide at least status or priority to update");
+        }
+
+        // Update status if provided
+        if (request.status() != null) {
+            ticket.setStatus(request.status().toUpperCase());
+        }
+
+        // Update priority if provided
+        if (request.priority() != null) {
+            ticket.setPriority(request.priority().toUpperCase());
+        }
+
+        Ticket updatedTicket = ticketRepository.save(ticket);
+
+        return mapToResponse(updatedTicket);
     }
 
     // Retrieve authenticated user
@@ -163,10 +229,13 @@ public class TicketService {
 
             boolean assignedAgent =
                     ticket.getAssignedAgent() != null
-                            && ticket.getAssignedAgent().getId().equals(user.getId());
+                            && ticket.getAssignedAgent().getId()
+                            .equals(user.getId());
 
             boolean creatingAgent =
-                    ticket.getCreatedBy().getId().equals(user.getId());
+                    ticket.getCreatedBy() != null
+                            && ticket.getCreatedBy().getId()
+                            .equals(user.getId());
 
             if (assignedAgent || creatingAgent) {
                 return;
