@@ -19,7 +19,7 @@ This repository contains the initial Spring Boot security module for the Support
 - Google OAuth client credentials for Google sign-in
 
 ## Configuration
-Copy `src/main/resources/application.properties.example` to `application.properties` locally (do not commit the real file), then set environment variables:
+Configure the required environment variables in your local environment. Keep application-local.properties local and untracked; never commit credentials or secrets.
 
 - `DB_USERNAME`
 - `DB_PASSWORD`
