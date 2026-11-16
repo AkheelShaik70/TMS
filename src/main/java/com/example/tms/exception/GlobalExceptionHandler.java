@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -74,6 +75,27 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 ex.getMessage(),
+                request
+        );
+    }
+
+    // Handle errors returned by external APIs such as OpenAI
+    @ExceptionHandler(RestClientResponseException.class)
+    public ResponseEntity<Map<String, Object>> handleExternalApiError(
+            RestClientResponseException ex,
+            HttpServletRequest request) {
+
+        if (ex.getStatusCode().value() == 429) {
+            return buildResponse(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "AI service is temporarily unavailable due to usage limits or exhausted credits. Please try again later.",
+                    request
+            );
+        }
+
+        return buildResponse(
+                HttpStatus.BAD_GATEWAY,
+                "AI service request failed. Please try again later.",
                 request
         );
     }
