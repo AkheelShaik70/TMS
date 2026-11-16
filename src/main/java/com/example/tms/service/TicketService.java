@@ -28,12 +28,11 @@ public class TicketService {
     public TicketService(
             TicketRepository ticketRepository,
             UserRepository userRepository) {
-
         this.ticketRepository = ticketRepository;
         this.userRepository = userRepository;
     }
 
-    // Agent creates a ticket on behalf of a customer
+    // Agent or Admin creates a ticket on behalf of a customer
     @Transactional
     public TicketResponse createTicket(
             CreateTicketRequest request,
@@ -44,36 +43,27 @@ public class TicketService {
 
         if (!hasRole(agent, "AGENT") && !hasRole(agent, "ADMIN")) {
             throw new AccessDeniedException(
-                    "Only agents and administrators can create tickets");
+                    "Only agents and admins can create tickets for customers");
         }
 
         User customer = userRepository.findByEmail(customerEmail)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Customer not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Customer not found"));
 
         if (!hasRole(customer, "CUSTOMER")) {
-            throw new IllegalArgumentException(
-                    "Selected user is not a customer");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "The specified user is not a customer");
         }
 
         Ticket ticket = new Ticket();
 
-        ticket.setTicketNumber(
-                "TKT-" + UUID.randomUUID()
-                        .toString().substring(0, 8).toUpperCase()
-        );
-
+        ticket.setTicketNumber(generateTicketNumber());
         ticket.setTitle(request.title());
         ticket.setDescription(request.description());
         ticket.setCategory(request.category());
-
-        ticket.setPriority(
-                request.priority() == null
-                        || request.priority().isBlank()
-                        ? "MEDIUM"
-                        : request.priority().toUpperCase()
-        );
-
+        ticket.setPriority(normalizePriority(request.priority()));
         ticket.setStatus("OPEN");
 
         ticket.setCustomer(customer);
@@ -85,7 +75,38 @@ public class TicketService {
         return mapToResponse(savedTicket);
     }
 
-    // Retrieve one ticket with authorization
+    // Customer creates a ticket for themselves
+    @Transactional
+    public TicketResponse createTicketForCustomer(
+            CreateTicketRequest request,
+            Authentication authentication) {
+
+        User customer = getAuthenticatedUser(authentication);
+
+        if (!hasRole(customer, "CUSTOMER")) {
+            throw new AccessDeniedException(
+                    "Only customers can create tickets");
+        }
+
+        Ticket ticket = new Ticket();
+
+        ticket.setTicketNumber(generateTicketNumber());
+        ticket.setTitle(request.title());
+        ticket.setDescription(request.description());
+        ticket.setCategory(request.category());
+        ticket.setPriority(normalizePriority(request.priority()));
+        ticket.setStatus("OPEN");
+
+        ticket.setCustomer(customer);
+        ticket.setCreatedBy(customer);
+        ticket.setAssignedAgent(null);
+
+        Ticket savedTicket = ticketRepository.save(ticket);
+
+        return mapToResponse(savedTicket);
+    }
+
+    // Retrieve one ticket with role-based authorization
     @Transactional(readOnly = true)
     public TicketResponse getTicketById(
             Long id,
@@ -95,7 +116,8 @@ public class TicketService {
 
         Ticket ticket = ticketRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Ticket not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"));
 
         checkTicketAccess(ticket, user);
 
@@ -112,25 +134,18 @@ public class TicketService {
         List<Ticket> tickets;
 
         if (hasRole(user, "ADMIN")) {
-
             tickets = ticketRepository.findAll();
 
         } else if (hasRole(user, "AGENT")) {
-
-            // Agent can see tickets created by them
-            // OR tickets currently assigned to them
             tickets = ticketRepository.findByAssignedAgentIdOrCreatedById(
                     user.getId(),
-                    user.getId()
-            );
+                    user.getId());
 
         } else if (hasRole(user, "CUSTOMER")) {
-
             tickets = ticketRepository.findByCustomerId(user.getId());
 
         } else {
-
-            throw new AccessDeniedException("Invalid user role");
+            throw new AccessDeniedException("Access denied");
         }
 
         return tickets.stream()
@@ -149,41 +164,32 @@ public class TicketService {
 
         if (!hasRole(user, "ADMIN") && !hasRole(user, "AGENT")) {
             throw new AccessDeniedException(
-                    "Only agents and administrators can update tickets");
+                    "Only agents and admins can update tickets");
         }
 
         Ticket ticket = ticketRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Ticket not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"));
 
-        // ADMIN can update any ticket
-        if (!hasRole(user, "ADMIN")) {
+        if (!hasRole(user, "ADMIN")
+                && (ticket.getAssignedAgent() == null
+                || !ticket.getAssignedAgent().getId().equals(user.getId()))) {
 
-            // AGENT can update only tickets assigned to them
-            boolean assignedAgent =
-                    ticket.getAssignedAgent() != null
-                            && ticket.getAssignedAgent().getId()
-                            .equals(user.getId());
-
-            if (!assignedAgent) {
-                throw new AccessDeniedException(
-                        "You can update only tickets assigned to you");
-            }
+            throw new AccessDeniedException(
+                    "You can only update tickets assigned to you");
         }
 
-        // At least one field must be provided
         if (request.status() == null && request.priority() == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Provide at least status or priority to update");
+                    "At least one field (status or priority) must be provided");
         }
 
-        // Update status if provided
         if (request.status() != null) {
             ticket.setStatus(request.status().toUpperCase());
         }
 
-        // Update priority if provided
         if (request.priority() != null) {
             ticket.setPriority(request.priority().toUpperCase());
         }
@@ -193,16 +199,43 @@ public class TicketService {
         return mapToResponse(updatedTicket);
     }
 
-    // Retrieve authenticated user
+    // Generate a unique ticket number
+    private String generateTicketNumber() {
+        return "TKT-" + UUID.randomUUID()
+                .toString()
+                .substring(0, 8)
+                .toUpperCase();
+    }
+
+    // Default priority is MEDIUM
+    private String normalizePriority(String priority) {
+        if (priority == null || priority.isBlank()) {
+            return "MEDIUM";
+        }
+
+        return priority.toUpperCase();
+    }
+
+    // Find the currently authenticated user
     private User getAuthenticatedUser(Authentication authentication) {
+
+        if (authentication == null || authentication.getName() == null) {
+            throw new AccessDeniedException(
+                    "Authentication is required");
+        }
 
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Authenticated user not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Authenticated user not found"));
     }
 
-    // Check whether user has the specified role
-    private boolean hasRole(User user, String expectedRole) {
+    // Check user role
+    private boolean hasRole(User user, String roleName) {
+
+        if (user.getRole() == null || user.getRole().getName() == null) {
+            return false;
+        }
 
         String actualRole = user.getRole().getName();
 
@@ -210,7 +243,7 @@ public class TicketService {
             actualRole = actualRole.substring(5);
         }
 
-        return actualRole.equalsIgnoreCase(expectedRole);
+        return actualRole.equalsIgnoreCase(roleName);
     }
 
     // Check whether the user can access this ticket
@@ -220,37 +253,40 @@ public class TicketService {
             return;
         }
 
-        if (hasRole(user, "CUSTOMER")
-                && ticket.getCustomer().getId().equals(user.getId())) {
-            return;
+        if (hasRole(user, "CUSTOMER")) {
+
+            if (ticket.getCustomer() != null
+                    && ticket.getCustomer().getId().equals(user.getId())) {
+                return;
+            }
+
+            throw new AccessDeniedException(
+                    "You can only access your own tickets");
         }
 
         if (hasRole(user, "AGENT")) {
 
-            boolean assignedAgent =
+            boolean isAssignedAgent =
                     ticket.getAssignedAgent() != null
-                            && ticket.getAssignedAgent().getId()
-                            .equals(user.getId());
+                            && ticket.getAssignedAgent().getId().equals(user.getId());
 
-            boolean creatingAgent =
+            boolean isCreator =
                     ticket.getCreatedBy() != null
-                            && ticket.getCreatedBy().getId()
-                            .equals(user.getId());
+                            && ticket.getCreatedBy().getId().equals(user.getId());
 
-            if (assignedAgent || creatingAgent) {
+            if (isAssignedAgent || isCreator) {
                 return;
             }
+
+            throw new AccessDeniedException(
+                    "You can only access tickets assigned to you or created by you");
         }
 
-        throw new AccessDeniedException(
-                "You are not authorized to access this ticket");
+        throw new AccessDeniedException("Access denied");
     }
 
-    // Convert Ticket entity into response DTO
+    // Convert Ticket entity into API response
     private TicketResponse mapToResponse(Ticket ticket) {
-
-        User customer = ticket.getCustomer();
-        User agent = ticket.getAssignedAgent();
 
         return new TicketResponse(
                 ticket.getId(),
@@ -260,10 +296,14 @@ public class TicketService {
                 ticket.getCategory(),
                 ticket.getPriority(),
                 ticket.getStatus(),
-                customer.getId(),
-                customer.getName(),
-                agent != null ? agent.getId() : null,
-                agent != null ? agent.getName() : null,
+                ticket.getCustomer().getId(),
+                ticket.getCustomer().getName(),
+                ticket.getAssignedAgent() != null
+                        ? ticket.getAssignedAgent().getId()
+                        : null,
+                ticket.getAssignedAgent() != null
+                        ? ticket.getAssignedAgent().getName()
+                        : null,
                 ticket.getCreatedAt(),
                 ticket.getUpdatedAt()
         );

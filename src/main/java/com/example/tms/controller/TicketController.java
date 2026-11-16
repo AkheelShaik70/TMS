@@ -24,7 +24,7 @@ public class TicketController {
         this.ticketService = ticketService;
     }
 
-    // Agent creates a ticket on behalf of a customer
+    // Agent or Admin creates a ticket on behalf of a customer
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TicketResponse createTicket(
@@ -39,7 +39,20 @@ public class TicketController {
         );
     }
 
-    // Retrieve one ticket with role-based authorization
+    // Customer creates their own ticket
+    @PostMapping("/self")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TicketResponse createTicketForCustomer(
+            @Valid @RequestBody CreateTicketRequest request,
+            Authentication authentication) {
+
+        return ticketService.createTicketForCustomer(
+                request,
+                authentication
+        );
+    }
+
+    // Retrieve one ticket
     @GetMapping("/{id}")
     public TicketResponse getTicketById(
             @PathVariable Long id,
