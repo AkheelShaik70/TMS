@@ -4,9 +4,14 @@ package com.example.tms.config;
 import com.example.tms.security.CustomUserDetailsService;
 import com.example.tms.security.GoogleOAuth2SuccessHandler;
 
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -25,13 +30,40 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    // Configure CORS for the React frontend
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        configuration.setAllowedOrigins(
+                List.of("http://localhost:5173")
+        );
+
+        configuration.setAllowedMethods(
+                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        );
+
+        configuration.setAllowedHeaders(
+                List.of("Authorization", "Content-Type")
+        );
+
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/**", configuration);
+
+        return source;
+    }
+
     // Configure database-based username and password authentication
     @Bean
     DaoAuthenticationProvider daoAuthenticationProvider(
             CustomUserDetailsService userDetailsService,
             PasswordEncoder passwordEncoder) {
 
-        // Spring Security 7 constructor
         DaoAuthenticationProvider provider =
                 new DaoAuthenticationProvider(userDetailsService);
 
@@ -75,7 +107,12 @@ public class SecurityConfig {
             JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
 
         http
-                // Disable CSRF for our stateless REST API
+                // Enable CORS
+                .cors(cors ->
+                        cors.configurationSource(corsConfigurationSource())
+                )
+
+                // Disable CSRF for stateless REST APIs
                 .csrf(csrf -> csrf.disable())
 
                 // OAuth2 login requires a session for state validation
@@ -89,9 +126,16 @@ public class SecurityConfig {
                 // Configure endpoint permissions
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public endpoints
+                        // Change Password requires authentication
+                        .requestMatchers("/api/auth/change-password")
+                        .authenticated()
+
+                        // Public authentication endpoints
                         .requestMatchers(
-                                "/api/auth/**",
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password",
                                 "/oauth2/**",
                                 "/login/**",
                                 "/error",

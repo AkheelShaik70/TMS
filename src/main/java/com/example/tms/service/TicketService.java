@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -24,12 +26,16 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
+    private final TicketAssignmentService ticketAssignmentService;
 
     public TicketService(
             TicketRepository ticketRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            TicketAssignmentService ticketAssignmentService) {
+
         this.ticketRepository = ticketRepository;
         this.userRepository = userRepository;
+        this.ticketAssignmentService = ticketAssignmentService;
     }
 
     // Agent or Admin creates a ticket on behalf of a customer
@@ -99,7 +105,9 @@ public class TicketService {
 
         ticket.setCustomer(customer);
         ticket.setCreatedBy(customer);
-        ticket.setAssignedAgent(null);
+
+        // Automatically assign to the least-loaded agent
+        ticketAssignmentService.assignAutomatically(ticket);
 
         Ticket savedTicket = ticketRepository.save(ticket);
 
@@ -186,12 +194,33 @@ public class TicketService {
                     "At least one field (status or priority) must be provided");
         }
 
-        if (request.status() != null) {
-            ticket.setStatus(request.status().toUpperCase());
+        // Prevent changes to completed tickets
+        String currentStatus = ticket.getStatus();
+
+        if ("RESOLVED".equalsIgnoreCase(currentStatus)
+                || "CLOSED".equalsIgnoreCase(currentStatus)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Resolved or closed tickets cannot be modified");
         }
 
+        // Update status and record resolution date
+        if (request.status() != null) {
+
+            String newStatus = request.status().toUpperCase(Locale.ROOT);
+
+            ticket.setStatus(newStatus);
+
+            if ("RESOLVED".equals(newStatus)) {
+                ticket.setResolvedAt(LocalDateTime.now());
+            }
+        }
+
+        // Update priority
         if (request.priority() != null) {
-            ticket.setPriority(request.priority().toUpperCase());
+            ticket.setPriority(
+                    request.priority().toUpperCase(Locale.ROOT));
         }
 
         Ticket updatedTicket = ticketRepository.save(ticket);
@@ -204,7 +233,7 @@ public class TicketService {
         return "TKT-" + UUID.randomUUID()
                 .toString()
                 .substring(0, 8)
-                .toUpperCase();
+                .toUpperCase(Locale.ROOT);
     }
 
     // Default priority is MEDIUM
@@ -213,7 +242,7 @@ public class TicketService {
             return "MEDIUM";
         }
 
-        return priority.toUpperCase();
+        return priority.toUpperCase(Locale.ROOT);
     }
 
     // Find the currently authenticated user
@@ -305,7 +334,9 @@ public class TicketService {
                         ? ticket.getAssignedAgent().getName()
                         : null,
                 ticket.getCreatedAt(),
-                ticket.getUpdatedAt()
+                ticket.getUpdatedAt(),
+                ticket.getResolvedAt(),
+                ticket.getAssignmentType()
         );
     }
 }

@@ -1,6 +1,7 @@
 
 package com.example.tms.service;
 
+import java.util.List;
 import java.util.Locale;
 
 import org.springframework.http.HttpStatus;
@@ -26,17 +27,20 @@ public class AdminService {
     private final RoleRepository roleRepository;
     private final TicketRepository ticketRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TicketAssignmentService ticketAssignmentService;
 
     public AdminService(
             UserRepository userRepository,
             RoleRepository roleRepository,
             TicketRepository ticketRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            TicketAssignmentService ticketAssignmentService) {
 
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.ticketRepository = ticketRepository;
         this.passwordEncoder = passwordEncoder;
+        this.ticketAssignmentService = ticketAssignmentService;
     }
 
     // Create a new AGENT account
@@ -76,7 +80,21 @@ public class AdminService {
         );
     }
 
-    // Reassign a ticket to another AGENT
+    // Retrieve all users with AGENT role
+    public List<AgentResponse> getAllAgents() {
+
+        return userRepository.findAllByRole_Name("AGENT")
+                .stream()
+                .map(agent -> new AgentResponse(
+                        agent.getId(),
+                        agent.getName(),
+                        agent.getEmail(),
+                        agent.getRole().getName()
+                ))
+                .toList();
+    }
+
+    // Manually assign or reassign a ticket
     @Transactional
     public TicketResponse assignTicket(
             Long ticketId,
@@ -84,21 +102,18 @@ public class AdminService {
 
         String email = agentEmail.trim().toLowerCase(Locale.ROOT);
 
-        // Find the ticket
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Ticket not found"
                 ));
 
-        // Find the new assigned agent
         User agent = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Agent not found"
                 ));
 
-        // Verify that the selected user has AGENT role
         String roleName = agent.getRole().getName();
 
         if (roleName.startsWith("ROLE_")) {
@@ -112,28 +127,61 @@ public class AdminService {
             );
         }
 
-        // Assign ticket to the selected agent
         ticket.setAssignedAgent(agent);
+        ticket.setAssignmentType("ADMIN_ASSIGNED");
 
         Ticket updatedTicket = ticketRepository.save(ticket);
 
-        User customer = updatedTicket.getCustomer();
-        User assignedAgent = updatedTicket.getAssignedAgent();
+        return buildTicketResponse(updatedTicket);
+    }
+
+    // Automatically assign or reassign a ticket
+    @Transactional
+    public TicketResponse autoAssignTicket(Long ticketId) {
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Ticket not found"
+                ));
+
+        if ("RESOLVED".equalsIgnoreCase(ticket.getStatus())
+                || "CLOSED".equalsIgnoreCase(ticket.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Resolved or closed tickets cannot be assigned."
+            );
+        }
+
+        ticketAssignmentService.assignAutomatically(ticket);
+
+        Ticket updatedTicket = ticketRepository.save(ticket);
+
+        return buildTicketResponse(updatedTicket);
+    }
+
+    // Convert Ticket entity into TicketResponse
+    private TicketResponse buildTicketResponse(Ticket ticket) {
+
+        User customer = ticket.getCustomer();
+        User assignedAgent = ticket.getAssignedAgent();
 
         return new TicketResponse(
-                updatedTicket.getId(),
-                updatedTicket.getTicketNumber(),
-                updatedTicket.getTitle(),
-                updatedTicket.getDescription(),
-                updatedTicket.getCategory(),
-                updatedTicket.getPriority(),
-                updatedTicket.getStatus(),
+                ticket.getId(),
+                ticket.getTicketNumber(),
+                ticket.getTitle(),
+                ticket.getDescription(),
+                ticket.getCategory(),
+                ticket.getPriority(),
+                ticket.getStatus(),
                 customer.getId(),
                 customer.getName(),
                 assignedAgent.getId(),
                 assignedAgent.getName(),
-                updatedTicket.getCreatedAt(),
-                updatedTicket.getUpdatedAt()
+                ticket.getCreatedAt(),
+                ticket.getUpdatedAt(),
+                ticket.getResolvedAt(),
+                ticket.getAssignmentType()
         );
     }
 }

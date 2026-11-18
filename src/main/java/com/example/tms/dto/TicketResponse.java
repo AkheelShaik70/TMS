@@ -16,5 +16,7 @@ public record TicketResponse(
         Long assignedAgentId,
         String assignedAgentName,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        LocalDateTime resolvedAt,
+        String assignmentType
 ) {}

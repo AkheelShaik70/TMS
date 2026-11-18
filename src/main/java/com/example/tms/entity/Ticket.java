@@ -51,6 +51,14 @@ public class Ticket {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    // Date and time when the ticket was resolved
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
+
+    // ADMIN_ASSIGNED or AUTO_ASSIGNED
+    @Column(name = "assignment_type", length = 30)
+    private String assignmentType;
+
     public Ticket() {}
 
     @PrePersist
@@ -147,5 +155,21 @@ public class Ticket {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public LocalDateTime getResolvedAt() {
+        return resolvedAt;
+    }
+
+    public void setResolvedAt(LocalDateTime resolvedAt) {
+        this.resolvedAt = resolvedAt;
+    }
+
+    public String getAssignmentType() {
+        return assignmentType;
+    }
+
+    public void setAssignmentType(String assignmentType) {
+        this.assignmentType = assignmentType;
     }
 }

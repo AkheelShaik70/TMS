@@ -8,6 +8,8 @@ import com.example.tms.service.PasswordResetService;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -61,5 +63,33 @@ public class AuthController {
                 request.newPassword());
 
         return "Password has been reset successfully.";
+    }
+
+    // Change password for an authenticated user
+    @PutMapping("/change-password")
+    public ResponseEntity<String> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            Authentication authentication) {
+
+        authService.changePassword(
+                authentication.getName(),
+                request);
+
+        return ResponseEntity.ok(
+                "Password changed successfully.");
+    }
+
+    // Create first local password for Google-authenticated user
+    @PostMapping("/create-password")
+    public ResponseEntity<String> createPassword(
+            @Valid @RequestBody CreatePasswordRequest request,
+            Authentication authentication) {
+
+        authService.createPassword(
+                authentication.getName(),
+                request.newPassword());
+
+        return ResponseEntity.ok(
+                "Password created successfully. You can now use email and password login.");
     }
 }

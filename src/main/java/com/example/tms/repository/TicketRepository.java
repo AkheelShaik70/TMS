@@ -21,4 +21,10 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             Long assignedAgentId,
             Long createdById
     );
+
+    // Count active tickets assigned to an agent
+    long countByAssignedAgentIdAndStatusIn(
+            Long agentId,
+            List<String> statuses
+    );
 }

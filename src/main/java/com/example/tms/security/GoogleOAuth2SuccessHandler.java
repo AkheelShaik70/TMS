@@ -2,9 +2,10 @@
 package com.example.tms.security;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -17,8 +18,6 @@ import com.example.tms.repository.RoleRepository;
 import com.example.tms.repository.UserRepository;
 import com.example.tms.service.AuthService;
 
-import tools.jackson.databind.ObjectMapper;
-
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,21 +26,21 @@ import jakarta.servlet.http.HttpServletResponse;
 public class GoogleOAuth2SuccessHandler
         implements AuthenticationSuccessHandler {
 
+    private static final String FRONTEND_CALLBACK =
+            "http://localhost:5173/oauth2/callback";
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final AuthService authService;
-    private final ObjectMapper objectMapper;
 
     public GoogleOAuth2SuccessHandler(
             UserRepository userRepository,
             RoleRepository roleRepository,
-            AuthService authService,
-            ObjectMapper objectMapper) {
+            AuthService authService) {
 
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.authService = authService;
-        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -57,10 +56,10 @@ public class GoogleOAuth2SuccessHandler
         String email = googleUser.getAttribute("email");
         String providerId = googleUser.getAttribute("sub");
         String name = googleUser.getAttribute("name");
+
         Boolean emailVerified =
                 googleUser.getAttribute("email_verified");
 
-        // Validate Google account information
         if (email == null
                 || providerId == null
                 || !Boolean.TRUE.equals(emailVerified)) {
@@ -99,8 +98,8 @@ public class GoogleOAuth2SuccessHandler
             user = userRepository.save(user);
         }
 
-        // Prevent automatic linking of unrelated local accounts
-        else if (!"GOOGLE".equals(user.getAuthProvider())
+        // Verify existing Google account
+        else if (!"GOOGLE".equalsIgnoreCase(user.getAuthProvider())
                 || !providerId.equals(user.getProviderId())) {
 
             response.sendError(
@@ -111,15 +110,22 @@ public class GoogleOAuth2SuccessHandler
             return;
         }
 
-        // Generate application JWT response
+        // Generate JWT
         AuthResponse tokenResponse = authService.response(user);
 
-        response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        // Redirect to React authentication callback
+        String callbackUrl = FRONTEND_CALLBACK
+                + "#accessToken="
+                + encode(tokenResponse.accessToken())
+                + "&email="
+                + encode(tokenResponse.email())
+                + "&role="
+                + encode(tokenResponse.role());
 
-        objectMapper.writeValue(
-                response.getOutputStream(),
-                tokenResponse
-        );
+        response.sendRedirect(callbackUrl);
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

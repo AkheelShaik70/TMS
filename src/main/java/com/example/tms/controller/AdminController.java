@@ -1,6 +1,8 @@
 
 package com.example.tms.controller;
 
+import java.util.List;
+
 import com.example.tms.dto.AgentResponse;
 import com.example.tms.dto.CreateAgentRequest;
 import com.example.tms.dto.TicketResponse;
@@ -34,7 +36,14 @@ public class AdminController {
         return adminService.createAgent(request);
     }
 
-    // Reassign a ticket to another AGENT
+    // Retrieve all AGENT users
+    @GetMapping("/agents")
+    public List<AgentResponse> getAllAgents() {
+
+        return adminService.getAllAgents();
+    }
+
+    // Manually assign or reassign a ticket
     @PatchMapping("/tickets/{id}/assign")
     public TicketResponse assignTicket(
             @PathVariable Long id,
@@ -44,5 +53,13 @@ public class AdminController {
             String agentEmail) {
 
         return adminService.assignTicket(id, agentEmail);
+    }
+
+    // Automatically assign or reassign a ticket
+    @PostMapping("/tickets/{id}/auto-assign")
+    public TicketResponse autoAssignTicket(
+            @PathVariable Long id) {
+
+        return adminService.autoAssignTicket(id);
     }
 }
