@@ -5,6 +5,7 @@ import {
     Route,
     Navigate,
 } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -30,6 +31,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 function App() {
     return (
         <BrowserRouter>
+            <SpeedInsights />
             <Routes>
 
                 {/* Public Routes */}
