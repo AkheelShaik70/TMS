@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -26,8 +27,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class GoogleOAuth2SuccessHandler
         implements AuthenticationSuccessHandler {
 
-    private static final String FRONTEND_CALLBACK =
-            "http://localhost:5173/oauth2/callback";
+    private final String frontendCallback;
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -36,11 +36,15 @@ public class GoogleOAuth2SuccessHandler
     public GoogleOAuth2SuccessHandler(
             UserRepository userRepository,
             RoleRepository roleRepository,
-            AuthService authService) {
+            AuthService authService,
+            @Value("${app.frontend.url:http://localhost:5173}")
+            String frontendUrl) {
 
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.authService = authService;
+        this.frontendCallback = frontendUrl.replaceAll("/+$", "")
+                + "/oauth2/callback";
     }
 
     @Override
@@ -114,7 +118,7 @@ public class GoogleOAuth2SuccessHandler
         AuthResponse tokenResponse = authService.response(user);
 
         // Redirect to React authentication callback
-        String callbackUrl = FRONTEND_CALLBACK
+        String callbackUrl = frontendCallback
                 + "#accessToken="
                 + encode(tokenResponse.accessToken())
                 + "&email="

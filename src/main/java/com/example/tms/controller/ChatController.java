@@ -23,7 +23,7 @@ public class ChatController {
             @Valid @RequestBody ChatRequest request) {
 
         ChatResponse response =
-                chatService.generateReply(request.message());
+                chatService.generateReply(request.message(), request.history());
 
         return ResponseEntity.ok(response);
     }

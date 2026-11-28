@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../../components/layout/AuthLayout";
 import { loginUser } from "../../services/authService";
 import { useAuth } from "../../context/AuthContext";
+import { BACKEND_URL } from "../../services/api";
 
 function Login() {
     const navigate = useNavigate();
@@ -96,7 +97,7 @@ function Login() {
         setError("");
 
         window.location.assign(
-            "http://localhost:8080/oauth2/authorization/google"
+            `${BACKEND_URL}/oauth2/authorization/google`
         );
     };
 

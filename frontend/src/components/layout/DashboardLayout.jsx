@@ -1,6 +1,7 @@
 
 import { useNavigate, NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import SupportChatbox from "../chat/SupportChatbox";
 
 function DashboardLayout({ title, children }) {
     const navigate = useNavigate();
@@ -140,6 +141,8 @@ function DashboardLayout({ title, children }) {
                 </section>
 
             </main>
+
+            {role === "CUSTOMER" && <SupportChatbox />}
         </div>
     );
 }

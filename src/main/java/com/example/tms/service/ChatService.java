@@ -2,12 +2,17 @@
 package com.example.tms.service;
 
 import com.example.tms.dto.ChatResponse;
+import com.example.tms.dto.ChatRequest.ChatMessage;
+import com.example.tms.exception.AiChatUnavailableException;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.util.Locale;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 
 @Service
@@ -44,62 +49,77 @@ public class ChatService {
             their support-related questions.
             """;
 
-    @Value("${openai.api.model:gpt-6-astra}")
+    @Value("${groq.api.key:}")
+    private String apiKey;
+
+    @Value("${groq.api.model:openai/gpt-oss-20b}")
     private String model;
 
-    @Value("${openai.mock.enabled:false}")
+    @Value("${groq.mock.enabled:${openai.mock.enabled:false}}")
     private boolean mockEnabled;
 
-    public ChatService(RestClient openAiRestClient) {
-        this.restClient = openAiRestClient;
+    public ChatService(RestClient groqRestClient) {
+        this.restClient = groqRestClient;
     }
 
     public ChatResponse generateReply(String message) {
+        return generateReply(message, List.of());
+    }
+
+    public ChatResponse generateReply(
+            String message,
+            List<ChatMessage> history) {
 
         if (mockEnabled) {
             return generateMockReply(message);
         }
 
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new AiChatUnavailableException(
+                    "Groq API key is not configured. Set GROQ_API_KEY "
+                            + "or enable chatbot mock mode."
+            );
+        }
+
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
+        if (history != null) {
+            history.forEach(item -> messages.add(Map.of(
+                    "role", item.role(),
+                    "content", item.content()
+            )));
+        }
+        messages.add(Map.of("role", "user", "content", message));
+
         JsonNode response = restClient.post()
-                .uri("/responses")
+                .uri("/chat/completions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .body(Map.of(
                         "model", model,
-                        "instructions", SYSTEM_PROMPT,
-                        "input", message
+                        "messages", messages,
+                        "max_completion_tokens", 512
                 ))
                 .retrieve()
                 .body(JsonNode.class);
 
-        StringBuilder reply = new StringBuilder();
+        String reply = response == null
+                ? ""
+                : response.path("choices").path(0)
+                        .path("message").path("content").asText("");
 
-        if (response != null && response.has("output")) {
-            for (JsonNode output : response.path("output")) {
-                for (JsonNode content : output.path("content")) {
-                    if ("output_text".equals(
-                            content.path("type").asText())) {
-                        reply.append(
-                                content.path("text").asText()
-                        );
-                    }
-                }
-            }
-        }
-
-        if (reply.isEmpty()) {
-            throw new IllegalStateException(
-                    "OpenAI returned no text response"
+        if (reply.isBlank()) {
+            throw new AiChatUnavailableException(
+                    "Groq returned no text response"
             );
         }
 
-        return new ChatResponse(reply.toString());
+        return new ChatResponse(reply);
     }
 
     // Intent-based mock chatbot
     private ChatResponse generateMockReply(String message) {
 
         String input = message.toLowerCase(Locale.ROOT).trim();
-
-        System.out.println("CHATBOT INPUT RECEIVED: [" + input + "]");
 
         String reply;
         String detectedIntent;

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import AuthLayout from "../../components/layout/AuthLayout";
 import { registerUser } from "../../services/authService";
+import { BACKEND_URL } from "../../services/api";
 
 function Register() {
     const [showPassword, setShowPassword] = useState(false);
@@ -32,7 +33,7 @@ function Register() {
     const handleGoogleLogin = () => {
         setError("");
         window.location.assign(
-            "http://localhost:8080/oauth2/authorization/google"
+            `${BACKEND_URL}/oauth2/authorization/google`
         );
     };
 

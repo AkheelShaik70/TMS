@@ -1,0 +1,11 @@
+.git
+.idea
+.metadata
+target
+**/target
+frontend/node_modules
+frontend/dist
+**/application-local.properties
+.env
+.env.*
+local-changes-before-sync.patch

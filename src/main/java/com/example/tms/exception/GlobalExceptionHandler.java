@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -19,6 +20,18 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AiChatUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleAiChatUnavailable(
+            AiChatUnavailableException ex,
+            HttpServletRequest request) {
+
+        return buildResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                ex.getMessage(),
+                request
+        );
+    }
 
     // Handle resources that do not exist
     @ExceptionHandler(EntityNotFoundException.class)
@@ -96,6 +109,19 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.BAD_GATEWAY,
                 "AI service request failed. Please try again later.",
+                request
+        );
+    }
+
+    // Handle connection failures and upstream request timeouts
+    @ExceptionHandler(ResourceAccessException.class)
+    public ResponseEntity<Map<String, Object>> handleExternalApiConnectionError(
+            ResourceAccessException ex,
+            HttpServletRequest request) {
+
+        return buildResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "AI service could not be reached or timed out. Please try again later.",
                 request
         );
     }
