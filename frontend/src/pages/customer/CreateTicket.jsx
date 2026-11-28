@@ -1,14 +1,17 @@
 
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createTicket } from "../../services/ticketService";
 
 function CreateTicket() {
     const navigate = useNavigate();
+    const location = useLocation();
+    const initialIssue = location.state?.initialIssue || "";
+    const chatTranscript = location.state?.chatTranscript || "";
 
     const [formData, setFormData] = useState({
-        title: "",
-        description: "",
+        title: initialIssue.slice(0, 150),
+        description: chatTranscript.slice(0, 2000) || initialIssue,
         category: "",
     });
 

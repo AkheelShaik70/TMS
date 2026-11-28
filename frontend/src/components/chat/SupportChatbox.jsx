@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { sendChatMessage } from "../../services/chatService";
 
 const createGreeting = () => ({
@@ -8,6 +9,7 @@ const createGreeting = () => ({
 });
 
 function SupportChatbox() {
+    const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([createGreeting()]);
     const [draft, setDraft] = useState("");
@@ -161,6 +163,25 @@ function SupportChatbox() {
                             <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
                                 {error}
                             </p>
+                        )}
+                        {messages.some((message) => message.role === "user") && (
+                            <div className="flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate("/customer/create-ticket", {
+                                        state: {
+                                            chatTranscript: messages
+                                                .filter((message) => message.role === "user" || message.role === "assistant")
+                                                .map((message) => `${message.role === "user" ? "Customer" : "SupportAI"}: ${message.content}`)
+                                                .join("\n\n"),
+                                            initialIssue: messages.find((message) => message.role === "user")?.content || "",
+                                        },
+                                    })}
+                                    className="rounded-lg border border-teal-500/40 px-3 py-2 text-xs font-medium text-teal-300 transition hover:bg-teal-500/10"
+                                >
+                                    Still need help? Create a ticket
+                                </button>
+                            </div>
                         )}
                         <div ref={messageEndRef} />
                     </div>
